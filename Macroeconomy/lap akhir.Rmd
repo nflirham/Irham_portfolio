@@ -1,0 +1,292 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+  code_folding: "hide"
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(fig.align = "center")
+```
+<center> # Laporan Tugas Kelompok 
+# AK2263 - Makroekonomi
+# Analisa Model Ekonomi Makro
+#### Reuven Cannarivo B. (10818003)
+#### M. Naufal Irham R. (10818019)
+#### Junaidy(10818027)
+#### Brian Stefano (10818037)
+#### Hendrawan Susilo (10818048)
+</center>
+
+<div style="text-align: justify">
+## Deskripsi Data
+Kelompok kami memilih negara Korea Selatan dan negara China sebagai Mitra dagang terbesarnya. 
+
+Data </br>
+Y = GDP negara Korea Selatan (Won) </br>
+C = Total konsumsi pada negara Korea Selatan (Won)</br>
+I = Total Investasi pada negara Korea Selatan (Won)</br>
+G = Total belanja pemerintah pada Korea Selatan (Won)</br>
+X = Ekspor negara Korea Selatan (Won)</br>
+CPI = Consumer Price Index (N/A)</br>
+I = suku bunga dalam negeri (%) </br>
+M = jumlah uang yang beredar (Won)</br>
+
+Diperoleh dari : https://data.worldbank.org/country/korea-rep </br>
+Pemutakhiran terbaru pada 2018. </br>
+Untuk variable Y, C, I, G, X, CPI, dan M,
+Titik awal data yang diperoleh dari tahun 1960 dan titik akhir di tahun 2018</br>
+Tetapi untuk suku bunga dalam negeri (i) titik awal dari tahun 1996 dan titik akhir 2018.
+
+Data Impor (IM) oleh Korea dari China (USD) diperoleh dari : </br>
+https://wits.worldbank.org/CountryProfile/en/Country/KOR/StartYear/1988/EndYear/2018/TradeFlow/Import/Indicator/MPRT-TRD-VL/Partner/CHN/Product/all-groups </br>
+Pemutakhiran terbaru pada 2018.</br>
+Titik awal data yang diperoleh dari tahun 1989 dan titik akhir di tahun 2018.</br>
+Kemudian data tersebut dikonversi ke Won dengan menggunakan data nilai tukar KRW  terhadap USD diperoleh dari: 
+https://au.finance.yahoo.com/quote/KRW%3DX/history?p=KRW%3DX </br>
+Pemutakhiran terbaru April 2020.</br>
+Data nilai tukar yang diperoleh adalah data perbulan, sehingga data yang digunakan untuk perhitungan adalah rata-rata selama 1 tahun tersebut.</br>
+Titik awal data yang diperoleh dari bulan Desember 2003 sehingga data yang dapat dihitung rata-rata nilai tukar per tahun dimulai dari tanggal 2004 hingga 2020 tetapi karena sebagian besar titik akhir variable lain di tahun 2018 maka data yang digunakan hanya sampai 2018.</br>
+Data impor(IM) yang digunakan dari tahun 2004 karena tidak diperoleh data nilai tukar dari 1989 sampai 2003.
+
+Sehingga data yang digunakan untuk diolah sudah dalam satuan Won.
+
+Data GDP China sebagai mitra dagang terbesar (Yuan) diperoleh dari : https://data.worldbank.org/indicator/NY.GDP.MKTP.KN?locations=CN </br>
+Pemutakhiran terbaru pada 2018.</br>
+Titik awal data yang diperoleh dari tahun 1960 dan titik akhir di tahun 2018.
+
+Data suku bunga negara mitra dagang terbesar (China) (%) diperoleh dari :
+https://data.worldbank.org/indicator/FR.INR.LEND </br>
+Pemutakhiran terbaru pada 2018. </br>
+Titik awal dari tahun 1980 dan titik akhir 2018.
+
+Data nilai tukar KRW terhadap CNY (Yuan) diperoleh dari : </br>
+https://au.finance.yahoo.com/quote/KRWCNY=X/history?p=KRWCNY=X&.tsrc=fin-srch </br>
+Pemutakhiran terbaru pada April 2020. </br>
+Data nilai tukar yang diperoleh adalah data perbulan, sehingga data yang digunakan untuk perhitungan adalah rata-rata selama 1 tahun tersebut. </br>
+Titik awal data yang diperoleh dari bulan Desember 2003 sehingga data yang dapat dihitung rata-rata nilai tukar per tahun dimulai dari tanggal 2004 hingga 2020 tetapi karena sebagian besar titik akhir variable lain di tahun 2018 maka data yang digunakan hanya sampai 2018.
+
+Pembuatan variabel YLD : Variabel ini merupakan variabel yang menyatakan GDP yang sebelumnya dinyatakan dalam Yuan dalam mata uang Won. (YL' = YL/E)
+
+Pembuatan variabel RM : Variabel ini merupakan nilai riil jumlah uang yang beredar dalam Won. (RM=M/P, P yang digunakan adalah CPI).
+
+```{r}
+library(lmtest)
+library("readxl")
+library(systemfit)
+library(lattice)
+data = read_excel("D:/makro/tubes/Data Korea Selatan.xlsx")
+save(data, file = "Data Korea Selatan.rda")
+
+YLD = 0
+for (i in 1:15){
+  YLD[i] = data$YL[44+i]/data$E[44+i]
+}
+RM = data$M/data$CPI
+
+```
+## 2. Sektor Riil
+$Y = Z$</br>
+$Z = C(Y) + I(Y, i) + G + NX $ </br>
+$NX = X(YL, E) - IM(Y)$ </br>
+$C = c_0 + c_1Y $ </br>
+$I = a + bY - di$ </br>
+Dengan 0 < c1,b < 1 </br>
+Di atas ini merupakan persamaan - persamaan yang terdapat dalam model Keynes.  </br>
+	
+Menurut sistem persamaan Keynes, variabel Y dan Z menjadi respons dan variabel lain pada sistem Keynes menjadi prediktornya.</br>
+Di bawah ini merupakan plot dari grafik Y terhadap C dan I.
+
+```{r}
+xyplot(data$Y ~ data$C + data$I,main="Grafik Y terhadap C dan I")
+```
+
+Dengan biru plot Y terhadap C dan ungu plot Y terhadap I. Terlihat bahwa Y dan C serta Y dan I memiliki korelasi positif dan perkiraan bentuk fungsinya adalah linear ditunjukkan dari plot grafik Y terhadap C dan I di atas ini.
+
+```{r}
+plot(data$i, data$I,main="Grafik I terhadap i")
+```
+
+Di atas ini merupakan diagram pencar dari I dan i. Terlihat bahwa pada grafik tersebut bahwa I dan i memiliki korelasi negatif dan perkiraan bentuk fungsinya adalah linear.
+
+Dari data Y beserta data C, bila dilakukan regresi linear C terhadap Y yang mengikuti persamaan :
+$$C = c_0 + c_1Y$$
+```{r}
+lm(data$C ~ data$Y)
+```
+
+Dihasilkan nilai $c_0$ sebesar $3.719\times 10^{13}$ dan nilai $c_1$ sebesar  0.4798. Sementara jika dilakukan regresi linear I terhadap Y dan i yang mengikuti persamaan :
+$$I = a + bY + di$$
+```{r}
+lm(data$I ~ data$Y+data$i)
+```
+
+Dihasilkan nilai a sebesar $9.633\times 10^{13}$, nilai b sebesar $2.563\times 10^{-01}$ dan nilai d sebesar $-3.061\times 10^{12}$.
+
+```{r}
+summary(lm(data$C ~ data$Y))
+summary(lm(data$I ~ data$Y+data$i))
+```
+
+Berdasarkan grafik dan estimasi yang telah diplot dan dilakukan, untuk persamaan $C(Y)$ dihasilkan nilai $R^2$ sebesar 0.9927 dan *p-value* sebesar $2.2\times 10^{-16}$. Sementara untuk persamaan $I(Y, i)$ dihasilkan nilai $R^2$ sebesar 0.9235 dan *p-value* sebesar $6.906\times 10^{-12}$. Berdasarkan nilai $R^2$, karena nilai $R^2$ dari kedua persamaan mendekati 1, maka dapat dikatakan regresi linear untuk kedua model akurat sementara dari nilai *p-value*, karena nilai *p-value* yang dihasilkan kurang dari 0.05, maka dinyatakan bahwa model sesuai dan hubungan prediktor dengan respons untuk kedua model signifikan.
+
+**Data yang digunakan mulai dari tahap ini merupakan data dari tahun 2004 dikarenakan beberapa data negara Korea Selatan yang tidak lengkap.**
+
+```{r}
+plot(data$Y, data$IM,main="Grafik IM terhadap Y")
+```
+
+Terlihat bahwa Y dan IM memiliki korelasi positif dan perkiraan bentuk fungsinya adalah linear ditunjukkan dari plot grafik Y terhadap IM di atas ini.
+
+```{r}
+plot(YLD, data$X[45:59],main="Grafik X terhadap IM")
+```
+
+Di atas ini merupakan diagram pencar dari Y~L~' dan X. Terlihat bahwa pada grafik tersebut bahwa Y~L~' dan X memiliki korelasi positif dan perkiraan bentuk fungsinya adalah linear.
+
+Dari data Y beserta data IM, bila dilakukan regresi linear IM terhadap Y yang mengikuti persamaan :
+$$IM = m_0 +m_1Y$$
+```{r}
+lm(data$IM ~ data$Y)
+```
+Dihasilkan nilai $m_0$ sebesar $-7.569\times 10^{10}$ dan nilai $m_1$ sebesar $1.192\times 10^{4}$. Sementara jika dilakukan regresi linear X terhadap Y~L~' yang mengikuti persamaan 
+$$X = x_0 + x_1Y_L'$$
+```{r}
+lm(data$X[45:59] ~ YLD)
+```
+
+Dihasilkan nilai $x_0$ sebesar $2.791\times 10^{14}$ dan nilai $x_1$ sebesar 4.422.
+
+```{r}
+summary(lm(data$IM ~ data$Y))
+summary(lm(data$X[45:59] ~ YLD))
+```
+
+Berdasarkan grafik dan estimasi yang telah diplot dan dilakukan, untuk persamaan $IM(Y)$ dan dihasilkan nilai $R^2$ sebesar 0.8648 dan *p-value* sebesar $5.182\times 10^{-07}$. Sementara untuk persamaan $X(YL,E)$ dihasilkan nilai $R^2$ sebesar 0.9491 dan *p-value* sebesar $8.696\times 10^{-10}$. Berdasarkan nilai $R^2$, karena nilai $R^2$ dari kedua persamaan mendekati 1, maka dapat dikatakan regresi linear untuk kedua model akurat sementara dari nilai *p-value*, karena nilai *p-value* yang dihasilkan kurang dari 0.05, maka dinyatakan bahwa model sesuai dan hubungan prediktor dengan respons untuk kedua model signifikan.
+
+```{r}
+plot(data$i, data$Y,main="Grafik Y terhadap i")
+```
+
+Terlihat bahwa Y dan i memiliki korelasi negatif dan perkiraan bentuk fungsinya adalah kuadratik ditunjukkan dari plot grafik Y terhadap i di atas ini. 
+
+```{r}
+plot(data$G, data$Y,main="Grafik Y terhadap G")
+```
+
+Di atas ini merupakan diagram pencar dari Y dan G. Terlihat bahwa pada grafik tersebut bahwa Y dan G memiliki korelasi positif dan perkiraan bentuk fungsinya adalah linear.
+
+```{r}
+xyplot(data$Y ~ data$i + data$G, main="Grafik Y terhadap G dan i")
+```
+
+<u>**Terlihat bahwa Y terhadap G memiliki korelasi positif dan perkiraan bentuk fungsinya adalah linear ditunjukkan dari plot grafik Y terhadap G dan Y terhadap i memiliki korelasi negatif dan perkiraan bentuk fungsinya adalah linear meskipun tidak kelihatan  di atas ini.**</u>
+
+```{r}
+plot(YLD, data$Y[45:59],main="grafik Y terhadap YL'")
+```
+
+Terlihat bahwa Y dan Y~L~' memiliki korelasi positif dan perkiraan bentuk fungsinya adalah linear ditunjukkan dari plot grafik Y terhadap Y~L~' di atas ini.
+
+Dari data Y beserta data i, G, Y~L~' bila dilakukan regresi linear Y terhadap i, G, dan Y~L~' yang mengikuti persamaan :
+$$Y = a + bG + cY_L' + di$$
+```{r}
+lm(data$Y[45:59] ~ data$i[45:59]+data$G[45:59]+YLD)
+```
+Dihasilkan nilai a sebesar $2.681\times 10^{14}$, nilai b sebesar 5.147, nilai c sebesar 0.6865, dan nilai d sebesar $3.250\times 10^{12}$.
+```{r}
+summary(lm(data$Y[45:59] ~ data$i[45:59]+data$G[45:59]+YLD))
+```
+Berdasarkan grafik dan estimasi yang telah diplot dan dilakukan, untuk persamaan $Y(G,YL',i)$ dihasilkan nilai $R^2$ sebesar 0.9919 dan *p-value* sebesar $8.877\times 10^{-12}$. Berdasarkan nilai $R^2$, karena nilai $R^2$ dari kedua persamaan mendekati 1, maka dapat dikatakan regresi linear untuk kedua model akurat sementara dari nilai *p-value*, karena nilai *p-value* yang dihasilkan kurang dari 0.05, maka dinyatakan bahwa model sesuai dan hubungan prediktor dengan respons untuk kedua model signifikan.
+
+Multiplier yang diperoleh, yaitu $\frac{1}{1-c_1+b+m_1}= 1,085517974$.
+
+
+***NO 13 14 BELUM ***
+
+## 3. Sektor finansial
+
+Relasi LM yang dipelajari dalam kelas memiliki bentuk sebagai berikut:
+
+$$\frac{M}{P} = f(Y, i)$$
+
+dimana f merupakan sebuah fungsi yang bentuk khususnya belum diketahui.
+
+Di bawah ini adalah plot RM terhadap i dan RM terhadap Y, terlihat bahwa pada diagram pencar tersebut RM dan i memiliki korelasi negatif dan perkiraan bentuk fungsinya adalah linear, sementara RM dan Y memiliki korelasi yang positif dan perkiraan bentuk fungsinya adalah linear kontinu bagian demi bagian.
+
+```{r}
+xyplot(RM ~ data$Y + data$i)
+```
+
+Ketika dilakukan regresi linear RM terhadap Y dan i mengikuti model :
+$$RM = r_1 + r_2Y - r_3i$$
+```{r}
+lm(RM ~ data$Y+data$i)
+```
+regresi linear tersebut menghasilkan nilai r~1~ sebesar $-5.736\times 10^{12}$, nilai r~2~ sebesar 0.01861 dan nilai r~3~ sebesar $3.941\times 10^{11}$. Sesuai dengan grafik, terbukti bahwa RM dan Y memiliki korelasi yang positif sementara RM dan i memiliki korelasi yang negatif.
+```{r}
+summary(lm(RM ~ data$Y+data$i))
+```
+Berdasarkan Grafik dan Estimasi yang telah diplot dan dilakukan, dihasilkan nilai R^2^ sebesar 0.9849 dan *p-value* sebesar $2.2\times 10^{-16}$. Dari nilai R^2^, disimpulkan bahwa model regresi cocok untuk memodelkan kedua plot dan nilai *p-value* yang bernilai < 0.05 menyatakan bahwa  respons dan prediktor memiliki hubungan yang berpengaruh secara signifikan.
+
+## 4.Model IS-LM
+
+Anggaplah sekarang bahwa relasi IS dan LM masing2 berupa fungsi linier. Peubah-peubah yang pantas menjadi respon adalah Y dan i sedangkan peubah-peubah yang pantas menjadi prediktor adalah G, YLD, dan RM. Berikut persamaan Y dan i sebagai fungsi G, YLD, RM
+$$IS :Y=c_0+c_1Y+a+bY-di+m_0+m_1Y-x_0-x_1Y_L'$$
+$$LM : \frac{M}{P}=r_1+r_2Y-r_3i$$
+$$IS : Y=7.681\times 10^{14}-3,250\times10^{12}i +5.147G+0.6865Y_L'$$
+$$LM: \frac{M}{P}=-5,736\times10^{12}+1,861102Y-3941\times10^{11}i$$
+$$i=\frac{r_1+r_2Y-\frac{M}{P}}{r_3}$$
+$$Y=\frac{\frac{M}{P}-r_1+r_3i}{r_2}$$
+$$Y=c_0+c_1Y+a+bY-\frac{d}{r_3}(r_1+r_2Y-\frac{M}{P})+G+m_0+m_1Y-x_0-x_1Y_L'$$
+$$Y^*=\frac{1}{1-c_1-b+\frac{dr_2}{r_3}-m_1}[c_0+a-\frac{dr_1}{r_3}+\frac{dM}{r_3P}+G+m_0-x_0-x_1Y_L']$$
+$$Y^*=7,681\times10^{14}-4,73\times10^{13}+1,5347\times10^{-1}Y-8,246637\frac{M}{P}+5,147G+6,865\times10^{-1}Y_L'$$
+$$Y^*=8,51476\times10^{14}-9,7417\frac{M}{P}+6,08G+0,811Y_L'$$
+$$\frac{\frac{M}{P}-r_1+r_3i}{r_2}=\frac{1}{1-c_1-b+\frac{dr_2}{r_3}-m_1}[c_0+a-\frac{dr_1}{r_3}+\frac{dM}{r_3P}+G+m_0-x_0-x_1Y_L']$$
+$$M-Pr_1+Pr_3i=\frac{r_2P}{1-c_1-b+\frac{dr_2}{r_3}-m_1}[c_0+a-\frac{dr_1}{r_3}+\frac{dM}{r_3P}+G+m_0-x_0-x_1Y_L']$$
+$$Pr_1-M+\frac{r_2P}{1-c_1-b+\frac{dr_2}{r_3}-m_1}[c_0+a-\frac{dr_1}{r_3}+\frac{dM}{r_3P}+G+m_0-x_0-x_1Y_L']=Pr_3i$$
+$$i^*=\frac{Pr_1-M}{Pr_3}+\frac{r_2P}{(Pr_3)(1-c_1-b+\frac{dr_2}{r_3}-m_1)}[c_0+a-\frac{dr_1}{r_3}+\frac{dM}{r_3P}+G+m_0-x_0-x_1Y_L']$$
+
+Dengan $Y^* = 2.469\times10^{14} + 5.638 G + 0.3854 Y_L' -1.981 RM$ </br>
+dan $i^* = -14.59 + 3.395\times10^{-13} G - 1.053\times10^{-13} Y_L' - 2.125\times10^{-12} RM$.
+
+```{r}
+xyplot(data$i[45:59] ~ data$G[45:59] + YLD,main="Grafik i terhadap G dan YL'")
+```
+Terlihat bahwa i dengan G dan YLD memiliki korelasi negatif dan perkiraan bentuk fungsinya adalah linear.
+```{r}
+lm(data$Y[45:59] ~ data$G[45:59]+YLD+RM[45:59])
+lm(data$i[45:59] ~ data$G[45:59]+YLD+RM[45:59])
+```
+```{r}
+summary(lm(data$Y[45:59] ~ data$G[45:59]+YLD+RM[45:59]))
+summary(lm(data$i[45:59] ~ data$G[45:59]+YLD+RM[45:59]))
+```
+Berdasarkan grafik dan estimasi yang telah diplot dan dilakukan, untuk persamaan Y dan dihasilkan nilai R^2^ sebesar 0.9916 dan *p-value* sebesar $1.094\times10^{-11}$. Sementara untuk persamaan i dihasilkan nilai R^2^ sebesar 0.7683 dan *p-value* sebesar 0.0008136. Berdasarkan nilai R^2^, karena nilai R^2^ dari kedua persamaan mendekati 1, maka dapat dikatakan regresi linear untuk kedua model akurat sementara dari nilai *p-value*, karena nilai *p-value* yang dihasilkan kurang dari 0.05, maka dinyatakan bahwa model sesuai dan hubungan prediktor dengan respons untuk kedua model signifikan.
+
+</div>
+
+```{r,echo=FALSE,results='hide',message=FALSE}
+
+
+
+#13. 
+rumahtangga <- data$C[45:59]~data$Y[45:59]
+investasi <- data$I[45:59]~data$Y[45:59]+data$i[45:59]
+ekspor <- data$X[45:59]~YLD
+impor <- data$IM[45:59]~data$Y[45:59]
+sys <- list(rumahtangga, investasi, ekspor, impor)
+instr <- ~data$G[45:59]+data$i[45:59]+YLD
+keynes.sys <- systemfit(sys, inst=instr, method="2SLS")
+summary(keynes.sys)
+
+#14. 
+
+#=================================================================================================================
+
+
+#=================================================================================================================
+
+```
