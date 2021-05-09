@@ -1,4 +1,4 @@
-# Irham_portfolio
+# Irham's portfolio
 Hello! My name is Muhammad Naufal Irham Ramdhani. I'm a third year actuarial student from Bandung Institute of Technology
 I have so many project during my year as actuarial student, but here is some of the work that i interested the most:
 1. Deep learning
