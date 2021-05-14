@@ -1,0 +1,346 @@
+---
+title: Analisis Peluang Kemenangan Klub English Premiere League dengan metode GLMM
+  (Generelized Linear Mixed Model)
+author: "Muhammad Naufal Irham Ramdhani"
+date: "13/5/2021"
+output:
+  html_document: default
+  word_document: default
+fig_width : 6 
+fig_height: 4 
+---
+
+# Latar belakang
+Pertandingan olahraga merupakan salah satu rekreasi yang disenanangi oleh banyak orang, baik tua maupun muda. Salah satu cabang olahraga dengan peminat terbanyak adalah sepak bola. Hampir setiap negara, memiliki liga sepak bola masing-masing. Namun, salah satu liga yang paling ditunggu dan paling kompetitif adalah liga sepakbola inggris yaitu *English Premiere League*.
+
+Dalam sepakbola, banyak sekali pihak yang terlibat. Mulai dari para pendukung, pelatih, pemain, bahkan pebisnis pun dapat terlibat dalam dunia sepakbola. Dan sudah pasti, mereka menginginkan tim yang mereka dukung menang. Banyak faktor yang dapat menentukan apakah suatu tim akan menang atau kalah. Faktor-faktor tersebut dapat kita analisis untuk memprediksi hasil kemenangan. Disinilah letak pentingnya analisis data, tidak hanya untuk sepakbola namun seluruh cabang olahraga. Dengan menganalisis data olahraga, kita dapat mengetahui bagaimana performa tim saat di lapangan. 
+
+Pada sepakbola, apapun bisa terjadi. Tim yang sejak awal unggul dapat mempertahankan keunggalan dan memenangi pertandingan, namun bisa juga tim yang pada mulanya kalah ataupun sama kuat pada babak pertama, bisa jadi ketika pertandingan usai, tim tersebut dapat meraih kemenangan. Hal inilah yang akan dianalisis. Karena data hasil pertandingan sudah pasti bukanlah berdistribusi normal melainkan distribusi bernoulli. Maka akan diggunakan *Generelized Linear Model* untuk memprediksi hasil akhir suatu pertandingan dengan diketahui bagaimana keadaan pada babak pertama. 
+
+Data yang akan dianalisis adalah data pertandingan *English Premiere League* dari musim 2010-2011 sampai 2020-2021. Data ini bersumber dari: 
+https://www.kaggle.com/pablohfreitas/all-premier-league-matches-20102021
+Data tersebut, diambil dengan metode *web scraping* atau mengekstrak langsung data dari website resmi *English Premiere League*. Data berisi 4070 pertandingan, dengan kolom sebanyak 114 kolom. Kolom-kolom tersebut diantaranya berisi tentang hal-hal berikut, yaitu skor akhir, skor babak pertama, Tim yang bermain sebagai tuan rumah, dst. Data tersebut memiliki size yang tidak terlalu besar, sehingga tidak perlu waktu komputasi yang lama dalam menganalisis data tersebut. 
+
+Dengan analisis data ini, kiranya dapat pula memilih tim mana yang lebih memungkinkan untuk menang. Hal ini tidak hanya terbatas pada olahraga saja. Tapi juga diharapkan dengan analisis data yang serupa juga bisa digunakan dalam bidang lain, seperti mencari agensi periklanan mana yang memiliki kemungkinan sukses terbaik. Hal ini karena analisis data ini tidak memerlukan peluang sukses dari variabel yang bersangkutan untuk memilih variabel terbaik
+
+# Metodologi
+
+## Import Library
+*Library* yang akan digunakan dalam analisis data ini, yakni:
+
+```{r message=FALSE, warning=FALSE}
+library(lme4)
+library(dplyr)
+library(ggplot2)
+library(pROC)
+library(caret)
+```
+Adapun fungsi dari masing-masing *library* adalah sebagai berikut:
+
+* lme 4  : Untuk melakukan analisis GLMM
+* dplyr  : Untuk mentransformasi *data set*
+* ggplot : Untuk membuat berbagai macam plot
+* pROC   : Untuk membuat kurva ROC
+* caret  : Untuk membuat tabel kontingensi
+
+## Import Dataset
+
+```{r}
+Data = read.csv('D:/Memento/Project/df_full_premierleague.csv')
+head(Data)[,2:5]
+```
+Dari cuplikan *data set* diatas, kita bisa lihat sumber darimana data hasil pertandingan tersebut berasal. Ada banyak sekali kolom pada data set tersebut, namun hanya sebagian data saja yang akan digunakan. Maka dari itu, data set tersebut perlu dibersihkan
+
+## Bersihkan dataset
+
+Dari sekian banyak kolom yang ada, hanya beberapa saja yang digunakan, yaitu:
+
+1. Nama tim yang bertanding (Kategorikal, dengan 37 level)
+2. Menang atau tidak (Kategorikal, dengan 2 level)
+3. Tuan rumah atau tamu (Kategorikal, dengan 2 level)
+4. Lawan tanding (Kategorikal, dengan 37 level (klub))
+3. Perbedaan goal dengan lawan (Diskrit, Bilangan bulat)
+
+
+Jika diperhatikan, data set di atas sebenarnya menunjukkan data per pertandingan. Sedangkan, data yang akan dianalisis adalah data per tim. Dengan kata lain, terdapat data implisit yang perlu dibangun. Dibawah ini adalah proses untuk membangun data implisit tersebut:
+
+
+```{r echo=FALSE, message=FALSE}
+Win          = NA
+club_name    = NA
+H_or_A       = NA
+Goal_diff    = NA
+Lawan        = NA
+
+
+df = data.frame(club_name, H_or_A, Win, Goal_diff, Lawan)
+
+Data = na.omit(Data)
+for (i in unique(Data$home_team)){
+  for (j in seq(1,length(Data$home_team))){
+    if (i == Data$home_team[j]){
+      Win         = (Data$sg_match_ft[j] > 0)*1
+      Goal_diff   = Data$sg_match_ht[j]
+      new_row     = data.frame(i, "H", Win, Goal_diff, Data$away_team[j])
+      names(new_row) = c("club_name", "H_or_A", "Win", "Goal_diff", "Lawan")
+      df = rbind(df, new_row)
+      
+    } else if (i == Data$away_team[j]){
+      Win         = (Data$sg_match_ft[j] < 0)*1
+      Goal_diff   = Data$sg_match_ht[j]*(-1)
+      new_row     = data.frame(i, "A", Win, Goal_diff, Data$home_team[j])
+      names(new_row) = c("club_name", "H_or_A", "Win", "Goal_diff", "Lawan")
+      df = rbind(df, new_row)
+    }
+  }
+}
+
+df = na.omit(df)
+
+df = data.frame(df)
+
+head(df)
+```
+Struktur dari data yang dihasilkan di atas adalah:
+```{r}
+str(df)
+```
+Dari hasil keluaran R diatas, kolom "club_name", "H_or_A", "Win", dan "Lawan" masih bertipe "character". Agar dapat dianalisis, maka tipe data dari masing-masing kolom diubah menjadi "factor"
+
+```{r}
+df$club_name = as.factor(df$club_name)
+df$H_or_A    = as.factor(df$H_or_A)
+df$Win       = as.factor(df$Win)
+df$Lawan     = as.factor(df$Lawan)
+```
+Selanjutnya cek *summary* data tersebut
+```{r}
+summary(df)
+```
+Akan kita ubah level dari variabel-variabel yang berupa data kategorikal
+
+```{r}
+df = df %>% mutate(club_name = relevel(club_name, ref = "Manchester United"))
+df = df %>% mutate(Win = relevel(Win, ref = "0"))
+df = df %>% mutate(Lawan = relevel(Lawan, ref = "Manchester United"))
+df = df %>% mutate(H_or_A = relevel(H_or_A, ref = "H"))
+
+str(df)
+```
+Data set tersebut dapat dijelaskan lebih jelas dengan menggunakan bar plot
+```{r fig1, out.width = '120%'}
+ggplot(df, aes(x = as.factor(df$Goal_diff), 
+               fill = as.factor(df$Win))) + 
+  geom_bar(position = "dodge")+
+  ggtitle("Bar Chart antara kemenangan dengan perbedaan goal")
+```
+
+Dari plot diatas, sekilas terlihat bahwa lebih banyak klub yang unggul di babak pertama lalu memenangi pertandingan dibandingkan dengan tim yang bangkit dari defisit gol lalu menang. Lebih dalam lagi, akan ditunjukkan barplot kemenangan tiap tim saat berlaga sebagai tamu ataupun tuan rumah dan juga barplot kemenangan tiap tim untuk tiap perbedaan goal pada babak pertama yang pernah dialami
+
+```{r fig2, out.width = '120%'}
+ggplot(df, aes(x = reorder(club_name, as.numeric(Win)), 
+               y = as.numeric(Win), 
+               fill = factor(as.factor(Goal_diff)))) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  theme_minimal() +
+  ggtitle("Banyaknya kemenangan oleh setiap tim dengan perbedaan goal pada babak pertama")
+```
+
+```{r fig3, out.width = '120%'}
+ggplot(df, aes(x = reorder(club_name, as.numeric(Win)), 
+               y = as.numeric(Win), 
+               fill = factor(H_or_A))) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  theme_minimal() +
+  ggtitle("Kemenangan Setiap Tim sebagai Tuan Rumah/Tamu")
+```
+
+Dari plot diatas, hasil suatu pertandingan dapat berkorelasi dengan klub yang bermain. Misal, klub yang kuat memiliki kemungkinan kemenangan yang lebih besar. Sedangkan klub yang lemah, memiliki kemungkinan kemenangan yang kecil. Dengan kata lain, setiap klub memiliki kemungkinan kemenangan yang berbeda-beda. Begitu pun juga hasil suatu kemenangan bergantung oleh lawan yang dihadapi. Lawan yang lebih kuat akan lebih sulit untuk dikalahkan, dan begitu juga sebaliknya. Maka dari itu, kita dapat membuat suatu *cluster*, dimana *cluster* tersebut berisikan klub-klub yang bermain di liga premier inggris. Atas dasar hal tersebut, maka model GLMM (Generelized Linear Mixed Models) adalah model yang tepat untuk menganalisis data ini karena variabel response memiliki korelasi.
+
+Ditambah lagi, dari plot diatas, tiap klub memiliki jumlah kemenangan yang bervariasi untuk perbedaan goal tertentu. Selain itu, terlihat juga bahwa banyaknya kemenangan ketika bertanding sebagai tim tuan rumah ataupun tamu relatif sama. Namun, hal ini akan diteliti lebih lanjut.
+
+Dalam anaslis data ini, Variabel respon dari data yang akan diolah adalah kemenangan suatu tim. Tim yang menang bernilai "1", sedangkan tim yang kalah atau seri bernilai "0". Maka dari itu, variabel respon memiliki distribusi bernoulli. *Link function* yang akan dipilih dalam menganalisis data ini adalah *logit link*. Seperti yang sudah dijelaskan sebelumnya, variabel penjelas yang akan digunakan dalam model adalah lawan, bermain sebagai tuan rumah atau tamu, dan lawan yang dihadapi
+
+Akan dicoba memodelkan GLMM dengan *Random intercept model* yang secara umum memiliki bentuk sebagai berikut:
+
+$$
+ln(\frac{\pi}{1-\pi}) = \alpha + X'\beta
+$$
+dengan
+$$
+y \sim B(1,\pi)
+$$
+dan
+$$
+\alpha \sim N(0,v^2)
+$$
+# Analisis Data
+
+Dalam menganalisis data, saya bagi terlebih dahulu membagi data menjadi dua, yang pertama untuk melatih model dan yang kedua untuk menguji model dan melakukan prediksi
+
+```{r warning=FALSE}
+
+n_train  = nrow(df)*0.75
+
+train_df = sample_n(df, n_train)
+test_df  = anti_join(df, train_df)
+```
+Pada kode R diatas, data yang digunakan sebagai data untuk melatih model sebanyak 75% dari data keseluruhan, sedangkan 25% dari data sisanya dijadikan data untuk menguji prediksi.
+
+Dibawah ini, akan dilakukan fitting model terhadap data *train*. Ada 3 model yang akan dicoba untuk fitting dengan data, yaitu:
+
+1. Model1 <- Win ~ Goal_diff + H_or_A + (1 | club_name)
+2. Model2 <- Win ~ Goal_diff + H_or_A + Lawan + (1 | club_name)
+3. Model3 <- Win ~ Goal_diff + H_or_A + (1| Lawan) + (1 | club_name)
+4. Model4 <- Win ~ Goal_diff + H_or_A + Lawan
+
+Disini, ada 3 hal akan dibandingkan, yaitu:
+
+1. Apakah model dengan *random effect* yang lebih simpel lebih baik daripada model dengan *random effect* yang lebih kompleks (membandingkan model 1 dan 2).
+2. Apakah model dengan *random effect* lebih baik daripada model tanpa *random effect* (Memandngkan model 2 dan 4)
+3. Apakah model variabel penjelas "Lawan" lebih baik dianggap sebagai *random effect* atau *fixed effect* (Memandngkan model 2 dan 3)
+
+```{r message=FALSE, warning=FALSE}
+Model1 <- glmer(as.numeric(paste(Win)) ~ Goal_diff + H_or_A + (1 | club_name),
+        data = train_df, family = binomial,
+        control = glmerControl(),
+        start = NULL)
+
+Model2 <- glmer(as.numeric(paste(Win)) ~ Goal_diff + H_or_A + Lawan + (1 | club_name),
+        data = train_df, family = binomial,
+        control = glmerControl(),
+        start = NULL)
+
+Model3 <- glmer(as.numeric(paste(Win)) ~ Goal_diff + H_or_A + (1 | Lawan) + (1 | club_name),
+        data = train_df, family = binomial,
+        control = glmerControl(),
+        start = NULL)
+
+Model4 <- glm(as.numeric(paste(Win)) ~ Goal_diff + H_or_A + Lawan,
+        data = train_df, 
+        family = binomial(link = "logit"))
+```
+
+Hasil AIC dari ketiga model tersebut adalah:
+
+```{r}
+modelsummary1 = summary(Model1)
+modelsummary2 = summary(Model2)
+modelsummary3 = summary(Model3)
+modelsummary4 = summary(Model4)
+
+cat("AIC untuk Model 1:", modelsummary1$AICtab[1])
+cat("AIC untuk Model 2:", modelsummary2$AICtab[1])
+cat("AIC untuk Model 3:", modelsummary3$AICtab[1])
+cat("AIC untuk Model 4:", modelsummary4$aic)
+```
+Dari hasil keluaran R diatas, didapat bahwa model kedua memiliki AIC terkecil, namun model kedua dan ketiga memiliki AIC yang tidak begitu berbeda jauh. Sedangkan model tanpa random effect memiliki AIC terbesar dibandingkan yang lain. Lebih lanjut lagi, kita dapat cari apakah random effect pada model signifikan atau tidak terhadap model tanpa random effect. 
+
+```{r}
+anova(Model2, Model4)
+```
+Dari hasil keluaran R diatas, didapat bahwa p-value yang didapat kurang dari $\alpha = 0.01$ bahkan mendekati nol, sehingga dapat dikatakan bahwa model dengan *random effect* berbeda secara signifikan dengan model tanpa *random effect*. Dengan kata lain, *random effect* pada model pertama tidak dapat diabaikan.
+
+Dibawah ini akan dihasilkan kurva ROC untuk masing-masing model sebagai perbandingan mana model yang terbaik dalam memprediksi
+
+```{r message=FALSE, warning=FALSE}
+pred1 = predict(Model1, type = "response")
+roccurve1 = roc(train_df$Win ~ pred1)
+
+pred2 = predict(Model2, type = "response")
+roccurve2 = roc(train_df$Win ~ pred2)
+
+pred3 = predict(Model3, type = "response")
+roccurve3 = roc(train_df$Win ~ pred3)
+
+pred4 = predict(Model4, type = "response")
+roccurve4 = roc(train_df$Win ~ pred4)
+```
+
+```{r}
+roclist = list("Model 1" = roccurve1, 
+               "Model 2" = roccurve2,
+               "Model 3" = roccurve3,
+               "Model 4" = roccurve4)
+ggroc(roclist, aes = "colour", legacy.axes = T)+
+  geom_abline(intercept = 0, slope = 1)+
+  labs(x = "1 - Specificity",
+       y = "Sensitivity",
+       colour = "Model")
+```
+
+Secara sekilas, dapat dilihat bahwa kurva ROC model 2 dan 3 merupakan kurva yang terbaik, sedangkan kurva untuk model 1 dan model 4 terlihat tidak jauh berbeda. Secara lebih detail, akan dihitung luas dibawah kurva ROC untuk masing-masing model. 
+
+```{r}
+cat("Luas dibawah kurva ROC untuk Model 1 :", auc(roccurve1))
+cat("Luas dibawah kurva ROC untuk Model 2 :", auc(roccurve2))
+cat("Luas dibawah kurva ROC untuk Model 3 :", auc(roccurve3))
+cat("Luas dibawah kurva ROC untuk Model 4 :", auc(roccurve4))
+```
+
+Dari hasil luas kurva ROC diatas, terlihat bahwa model 2 dan 3 memiliki luas dibawah kurva ROC yang tidak berbeda jauh.Dari sini, Karena model 3 membutuhkan parameter yang lebih sedikit dibanding model 2 (lebih simpel), maka model 3 lah yang akan dipilih. 
+
+```{r warning=FALSE}
+modelsummary3
+```
+
+Contoh interpretasi yang dapat diambil dari hasil fitting diatas adalah setiap kenaikan 1 goal pada perbedaan goal pada babak pertama akan meningkatkan *odds* tim tersebut untuk menang sebesar $352,96\%$ karena $e^{1.51064} = 4.5296$. Jika tim bertanding sebagai tim tamu, maka *odds* tim tersebut akan menang menurun sebesar $45,32 \%$ karena $e^{-0.60368} = 0.5467957$ dibandingkan jika tim tersebut bermain sebagai tuan rumah.
+
+Selanjutnya, akan dibangun tabel kontingensi dari model ketiga
+
+```{r}
+pred = factor(ifelse(predict(Model3) < 0.1, 0, 1))
+mat  = confusionMatrix(pred, as.factor(train_df$Win))
+mat
+```
+Dari tabel kontingensi diatas, ada beberapa hal dapat diambil, yaitu:
+
+1. Tingkat akurasi model terhadap *train data* adalah 79.74% (Accuracy)
+2. 89.24% Pertandingan yang berakhir seri atau kalah dapat diprediksi dengan benar (Sensitivity)
+3. 64.36% Pertandingan yang berakhir kemenangana dapat diprediksi dengan (Specificity) 
+4. 80.21% Hasil prediksi kemenangan sesuai dengan data sesungguhnya
+5. 78.71% Hasil prediksi kekalahan atau seri sesuai dengan data sesungguhnya
+6. 61.81% data yang ada adalah pertandingan yang berakhir seri atau kalah(Prevalance)
+7. 55.16% data yang ada dideteksi sebagai seri atau kekalahan (Detection Rate) 
+8. 68.77% data yang ada dideteksi sebagai seri atau kekalahan baik prediksinya salah ataupun benar (Detection Prevelance)
+9. Rata-rata kebenaran model dalam meprediksi adalah 76.80% 
+
+## Prediksi
+
+Cuplikan hasil prediksi model dengan data test adalah sebagai berikut
+```{r}
+prob=round(predict(Model1, test_df, type='response'),2)
+
+predtest=factor(ifelse(prob < 0.1 , 0, 1))
+
+print(sample_n(data.frame(prob, FittedValue=predtest, test_df), 10))
+```
+
+```{r}
+confusionMatrix(predtest, as.factor(test_df$Win))
+```
+
+Dari tabel kontingensi diatas, ada beberapa hal dapat diambil, yaitu:
+
+1. Tingkat akurasi model terhadap *test data* adalah 69.05% (Accuracy)
+2. 52.82% Pertandingan yang berakhir seri atau kalah dapat diprediksi dengan benar (Sensitivity)
+3. 91.85% Pertandingan yang berakhir kemenangana dapat diprediksi dengan (Specificity) 
+4. 90.10% Hasil prediksi kemenangan sesuai dengan data sesungguhnya (PPV)
+5. 58.07% Hasil prediksi kekalahan atau seri sesuai dengan data sesungguhnya (NPV)
+6. 58.43% data yang ada adalah pertandingan yang berakhir seri atau kalah(Prevalance)
+7. 30.87% data yang ada dideteksi sebagai seri atau kekalahan (Detection Rate) 
+8. 34.26% data yang ada dideteksi sebagai seri atau kekalahan baik prediksinya salah ataupun benar (Detection Prevelance)
+9. Rata-rata kebenaran model dalam meprediksi adalah 72.33% 
+
+# Kesimpulan
+
+1. Prediksi Kemungkinan suatu tim akan menang dapat diketahui dengan menggunakan model 1         + Tingkat akurasi model dengan *train data* adalah 79.31%
+    + Tingkat akurasi model dengan *test data* adalah 69.05%
+    + Cuplikan hasil predikisi ada pada tabel bagian prediksi
+
+# Referensi
+De jong, piet, dan Gillian Z. Heller. 2008. *Generalized linear models for insurance data*. Cambridge: Cambridge University Press.
+
+
